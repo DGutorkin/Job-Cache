@@ -5,8 +5,21 @@ use Modern::Perl;
 use lib::abs("../lib");
 use Job::Cache;
  
-if (!$ARGV[0]) {
-die <<EOF;
+if ($ARGV[0]) {
+    my ($command, $key, $value) = @ARGV;
+    my $memd = Job::Cache->new( host => '127.0.0.1' );
+    if ($command eq 'set' and defined $key and defined $value) {
+        $memd->set($key, $value);
+    }
+    elsif ($command eq 'get' and defined $key) {
+        say $memd->get($key) || $memd->err;
+    }
+    elsif ($command eq 'delete' and defined $key) {
+        say $memd->delete($key) || $memd->err;
+    }
+} 
+else {
+    die <<EOF;
 Usage: $0 <command> [parameters]
 Command might be:
 \t set <key> <value> - to store data in memcached
@@ -14,16 +27,4 @@ Command might be:
 \t delete <key> - to delete data in memcached
 This client assume that memcached is running on 127.0.0.1:11211
 EOF
-}
-
-my ($command, $key, $value) = @ARGV;
-my $memd = Job::Cache->new( host => '127.0.0.1' );
-if ($command eq 'set' and defined $key and defined $value) {
-    $memd->set($key, $value);
-}
-elsif ($command eq 'get' and defined $key) {
-    say $memd->get($key) || $memd->err;
-}
-elsif ($command eq 'delete' and defined $key) {
-    say $memd->delete($key) || $memd->err;
 }
