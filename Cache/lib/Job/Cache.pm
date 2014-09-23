@@ -2,7 +2,7 @@ package Job::Cache;
 
 use Modern::Perl;
 use IO::Socket::INET;
-use Storable;
+use Storable qw(nfreeze thaw);
 
 =head1 NAME
 
@@ -41,6 +41,8 @@ BEGIN {
 my $memd = Job::Cache->new();
 
 =cut
+
+use constant F_STORABLE => 1;
 
 sub new {
     my $class = shift;
@@ -90,13 +92,13 @@ sub set {
     if (ref $value) {
         # we have to copy ref data and serialize it before sending to memcached
         $value = Storable::nfreeze($value);
-        $flag = 'storable';
+        $flag |= F_STORABLE;
+
     }
 
     my $data_length = length($value);
     my $command = "set $key $flag $timeout $data_length\r\n$value\r\n";
     print $socket "$command";
-
 
     my $ret;
     while ( my $data = <$socket>) {
@@ -105,11 +107,12 @@ sub set {
             last;
         }
         elsif ($data =~ /(?:NOT_STORED|NOT_FOUND|ERROR)\r\n$/) {
-            $self->err("$1");
+            $self->err("$data");
             return undef;
         }
     }
-    return map { "$_\r\n"} split (/\r\n/, $ret);
+    $ret =~ s/\r\n//;
+    return $ret;
 }
 
 =head2 get - get the data from memcached by key
@@ -135,26 +138,29 @@ sub get {
         if ($data =~ /(?:OK|END)\r\n$/) {
             last;
         } elsif ($data =~ /(?:ERROR)\r\n$/) {
-            $self->err("$1");
+            $self->err("$data");
             return undef;
         }
     }
-    my ($ret_value) = map { "$_\r\n"} (split (/\r\n/, $ret))[1];
-    if ($ret_value) {
-        chop $ret_value; chop $ret_value;
-        return $ret_value;
-    } 
-    else {
+
+    my @data = split (/\r\n/, $ret);    # @data consist of 3 parts: response line with information about the key, data and "END" word
+
+    if ($data[0] =~ /VALUE\s\w+\s1\s/) {
+        # deserialization if flag eq 1
+        $data[1] = Storable::thaw($data[1]);
+    } elsif ($data[0] !~ /VALUE\s\w+\s/) {; # if nothig found
         $self->err('Nothing found');
         return undef;
     }
+    return $data[1];
+
 }
 
 =head2 delete - delete data in memcached by key
 
 $memd->delete('key')
 
-Returns true if data stored successful. 
+Returns 'DELETED' if data removed successful. 
 
 =cut
 
@@ -179,7 +185,8 @@ sub delete {
             return undef;
         }
     }
-    return map { "$_\r\n"} split (/\r\n/, $ret);
+    $ret =~ s/\r\n//;
+    return $ret;
 }
 
 =head2 err - error handling getter/setter
