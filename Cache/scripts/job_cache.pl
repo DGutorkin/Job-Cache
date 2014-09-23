@@ -17,13 +17,13 @@ EOF
 }
 
 my ($command, $key, $value) = @ARGV;
-my $memd = Job::Cache->new( host => 'domsireni.com' );
+my $memd = Job::Cache->new( host => '127.0.0.1' );
 if ($command eq 'set' and defined $key and defined $value) {
     $memd->set($key, $value);
 }
 elsif ($command eq 'get' and defined $key) {
-    say $memd->get($key);
+    say $memd->get($key) || $memd->err;
 }
 elsif ($command eq 'delete' and defined $key) {
-    $memd->delete($key);
+    say $memd->delete($key) || $memd->err;
 }

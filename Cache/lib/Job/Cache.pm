@@ -11,10 +11,10 @@ Job::Cache - Memcached client class written for D.Simonov
 =head1 SYNOPSIS
 
   use Job::Cache;
-  my $memd = Job::Cache->new({
+  my $memd = Job::Cache->new(
     host => '127.0.0.1',        # this is default values, you can omit them
     port => '11211',            # default port for memcached
-  })
+  )
 
 
 
@@ -98,12 +98,18 @@ sub set {
     print $socket "$command";
 
 
-    my @ret;
+    my $ret;
     while ( my $data = <$socket>) {
-        push @ret, $data;
-        last if $data =~ /(?:STORED|NOT_STORED|EXISTS|NOT_FOUND|ERROR)\r\n$/;
+        $ret .= $data;
+        if ($data =~ /(?:STORED|EXISTS)\r\n$/) {
+            last;
+        }
+        elsif ($data =~ /(?:NOT_STORED|NOT_FOUND|ERROR)\r\n$/) {
+            $self->err("$1");
+            return undef;
+        }
     }
-    return 1 if grep {/^STORED/} @ret;
+    return map { "$_\r\n"} split (/\r\n/, $ret);
 }
 
 =head2 get - get the data from memcached by key
@@ -123,20 +129,24 @@ sub get {
     my $socket = $self->{socket};
     print $socket "get $key\r\n";
 
-    my @ret;
+    my $ret;
     while ( my $data = <$socket>) {
-        push @ret, $data;
+        $ret .= $data;
         if ($data =~ /(?:OK|END)\r\n$/) {
             last;
         } elsif ($data =~ /(?:ERROR)\r\n$/) {
-            $self->err('ERROR $!');
+            $self->err("$1");
             return undef;
         }
     }
-
-    for (my $i=1; $i < $#ret; $i++) {
-        chop $ret[$i]; chop $ret[$i];
-        return $ret[$i];
+    my ($ret_value) = map { "$_\r\n"} (split (/\r\n/, $ret))[1];
+    if ($ret_value) {
+        chop $ret_value; chop $ret_value;
+        return $ret_value;
+    } 
+    else {
+        $self->err('Nothing found');
+        return undef;
     }
 }
 
@@ -157,12 +167,19 @@ sub delete {
     my $socket = $self->{socket};
     print $socket "delete $key\r\n";
 
-    my @ret;
+    my $ret;
     while ( my $data = <$socket>) {
-        push @ret, $data;
-        last if $data =~ /(?:DELETED|NOT_FOUND|ERROR)\r\n$/;
+        $ret .= $data;
+        if ($data =~ /(?:DELETED)\r\n$/) {
+            last;
+        }
+        elsif ($data =~ /(?:NOT_FOUND|ERROR)\r\n$/) {
+            chop $data; chop $data;
+            $self->err("$data");
+            return undef;
+        }
     }
-    return 1 if grep {/^DELETED/} @ret;
+    return map { "$_\r\n"} split (/\r\n/, $ret);
 }
 
 =head2 err - error handling getter/setter
