@@ -16,10 +16,8 @@ if ($ARGV[0]) {
     }
     elsif ($command eq 'delete' and defined $key) {
         say $memd->delete($key) || $memd->err;
-    }
-} 
-else {
-    die <<EOF;
+    else {
+        die <<EOF;
 Usage: $0 <command> [parameters]
 Command might be:
 \t set <key> <value> - to store data in memcached

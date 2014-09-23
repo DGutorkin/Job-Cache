@@ -111,7 +111,7 @@ sub set {
             return undef;
         }
     }
-    $ret =~ s/\r\n//;
+    chop $ret; chop $ret;
     return $ret;
 }
 
@@ -185,7 +185,7 @@ sub delete {
             return undef;
         }
     }
-    $ret =~ s/\r\n//;
+    chop $ret; chop $ret;
     return $ret;
 }
 
@@ -202,7 +202,6 @@ sub err {
 
     if ($errstr) {
         $self->{error} = $errstr;
-        return undef;
     } else {
         return $self->{error};
     }
